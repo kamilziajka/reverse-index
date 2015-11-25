@@ -1,14 +1,11 @@
 #include <iostream>
 #include <vector>
 #include <map>
+#include <fstream>
+#include <algorithm>
 
 #include <omp.h>
 #include <dirent.h>
-
-#include <chrono>
-#include <thread>
-#include <fstream>
-#include <algorithm>
 
 using namespace std;
 
@@ -76,6 +73,16 @@ const string Config::FILE_PARAM = "--file=";
 class ReverseIndex {
 public:
   ReverseIndex(Config config) {
+    cout << "Files: " << endl;
+    for (string file : config.files) {
+      cout << " - " << file << endl;
+    }
+
+    cout << endl << "Keywords: " << endl;
+    for (string keyword : config.keywords) {
+      cout << " - " << keyword << endl;
+    }
+
     map<string, vector<string>> index = recreateIndex(config.files);
     find(index, config.keywords);
   }
@@ -90,7 +97,6 @@ private:
     #pragma omp parallel for shared(results)
     for (int i = 0; i < files.size(); i++) {
       int thread = omp_get_thread_num();
-      //std::this_thread::sleep_for(std::chrono::milliseconds(500 + (100 * thread)));
 
       string file = files[i];
       map<string, vector<string>>* keywords = &results[thread];
@@ -138,54 +144,38 @@ private:
     }
 
     return index;
+  }
 
-    /*for (pair<string, vector<string>> pair : keywords) {
-      cout << pair.first << ":" << endl;
+  void find(map<string, vector<string>> index, vector<string> keywords) {
+    int threads = omp_get_max_threads();
 
-      for (string file : pair.second) {
-        cout << " - " << file << endl;
+    vector<vector<pair<string, vector<string>>>> results((unsigned int) threads);
+
+    #pragma omp parallel for shared(results, index, keywords)
+    for(int i = 0; i < index.size(); i++) {
+      map<string, vector<string>>::iterator it = index.begin();
+      advance(it, i);
+
+      string keyword = it->first;
+
+      if(std::find(keywords.begin(), keywords.end(), keyword) != keywords.end()) {
+        int thread = omp_get_thread_num();
+
+        results[thread].push_back({ it->first, it->second });
       }
+    }
 
-      cout << endl;
-    }*/
-/*
-    for (map<string, vector<string>> result : results) {
-      for (pair<string, vector<string>> p : result) {
-        cout << p.first << ": " << endl;
+    cout << endl;
+    for (vector<pair<string, vector<string>>> v : results) {
+      for (pair<string, vector<string>> pair : v) {
+        cout << pair.first << ":" << endl;
 
-        for (string file : p.second) {
-          cout << " - [" << file << "]" << endl;
+        for (string file : pair.second) {
+          cout << " - " << file << endl;
         }
 
         cout << endl;
       }
-    }*/
-  }
-
-  void find(map<string, vector<string>> index, vector<string> keywords) {
-    map<string, vector<string>>::iterator it = index.begin();
-
-    vector<pair<string, vector<string>>> results;
-
-    #pragma omp parallel for shared(index)
-    for(int i = 0; i < index.size(); i++) {
-      string keyword = it->first;
-
-      if(std::find(keywords.begin(), keywords.end(), keyword) != keywords.end()) {
-        results.push_back({ it->first, it->second });
-      }
-
-      advance(it, 1);
-    }
-
-    for (pair<string, vector<string>> pair : results) {
-      cout << pair.first << ":" << endl;
-
-      for (string file : pair.second) {
-        cout << " - " << file << endl;
-      }
-
-      cout << endl;
     }
   }
 };

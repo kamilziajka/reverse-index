@@ -7,7 +7,7 @@ const DIRECTORY = './files';
 let randomGeneratorFactory = (name, chars) => ({
   name,
   generator: (stream) => {
-    for (let i = 0; i < 10000; i++) {
+    for (let i = 0; i < 1000; i++) {
       let word = '';
 
       while (word.length < 5) {
