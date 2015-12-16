@@ -87,6 +87,9 @@ public:
     }
 
     map<string, vector<string>> index = recreateIndex(config.files);
+
+    cout << endl << "Index complete, searching for keywords..." << endl;
+
     find(index, config.keywords);
   }
 
