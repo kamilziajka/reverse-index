@@ -71,6 +71,9 @@ const string Config::DIRECTORY_PARAM = "--dir=";
 const string Config::FILE_PARAM = "--file=";
 
 class ReverseIndex {
+private:
+  const static int CACHE_SPREAD;
+
 public:
   ReverseIndex(Config config) {
     cout << "Files: " << endl;
@@ -91,7 +94,7 @@ private:
   map<string, vector<string>> recreateIndex(vector<string> files) {
     int threads = omp_get_max_threads();
 
-    vector<map<string, vector<string>>> results((unsigned long) threads);
+    vector<map<string, vector<string>>> results((unsigned long) threads * CACHE_SPREAD);
 
     // processing file in parallel
     #pragma omp parallel for shared(results)
@@ -99,7 +102,7 @@ private:
       int thread = omp_get_thread_num();
 
       string file = files[i];
-      map<string, vector<string>>* keywords = &results[thread];
+      map<string, vector<string>>* keywords = &results[thread * CACHE_SPREAD];
 
       // file loading and processing
       ifstream handle(file);
@@ -124,7 +127,9 @@ private:
 
     map<string, vector<string>> index;
 
-    for (map<string, vector<string>> result : results) {
+    for (int i = 0; i < threads; i++) {
+      map<string, vector<string>> result = results[i * CACHE_SPREAD];
+
       for (pair<string, vector<string>> pair : result) {
         string keyword = pair.first;
         vector<string> sourceFileNames = pair.second;
@@ -136,9 +141,9 @@ private:
         vector<string>* fileNames = &index.at(keyword);
 
         fileNames->insert(
-          fileNames->end(),
-          sourceFileNames.begin(),
-          sourceFileNames.end()
+                fileNames->end(),
+                sourceFileNames.begin(),
+                sourceFileNames.end()
         );
       }
     }
@@ -149,7 +154,7 @@ private:
   void find(map<string, vector<string>> index, vector<string> keywords) {
     int threads = omp_get_max_threads();
 
-    vector<vector<pair<string, vector<string>>>> results((unsigned int) threads);
+    vector<vector<pair<string, vector<string>>>> results((unsigned int) threads * CACHE_SPREAD);
 
     #pragma omp parallel for shared(results, index, keywords)
     for(int i = 0; i < index.size(); i++) {
@@ -161,12 +166,14 @@ private:
       if(std::find(keywords.begin(), keywords.end(), keyword) != keywords.end()) {
         int thread = omp_get_thread_num();
 
-        results[thread].push_back({ it->first, it->second });
+        results[thread * CACHE_SPREAD].push_back({ it->first, it->second });
       }
     }
 
     cout << endl;
-    for (vector<pair<string, vector<string>>> v : results) {
+    for (int i = 0; i < threads; i++) {
+      vector<pair<string, vector<string>>> v = results[i * CACHE_SPREAD];
+
       for (pair<string, vector<string>> pair : v) {
         cout << pair.first << ":" << endl;
 
@@ -179,6 +186,8 @@ private:
     }
   }
 };
+
+const int ReverseIndex::CACHE_SPREAD = 64;
 
 int main(int argc, char* argv[]) {
   Config config(argc, argv);
